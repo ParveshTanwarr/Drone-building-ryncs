@@ -3,7 +3,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, ContactShadows, Html } from '@react-three/drei';
 import { motion, AnimatePresence } from 'motion/react';
 import DroneModel, { BuildState } from '../components/3d/DroneModel';
-import { Play, Square, Wrench, Code, Terminal, CheckCircle2, Circle, BookOpen, Wind, Battery, SlidersHorizontal, Gamepad2, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, RotateCcw, RotateCw, Info } from 'lucide-react';
+import { Play, Square, Wrench, Code, Terminal, CheckCircle2, Circle, BookOpen, Wind, Battery, SlidersHorizontal, Gamepad2, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, RotateCcw, RotateCw, Info, Target, AlertTriangle, Keyboard } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 type Mode = 'build' | 'code' | 'physics' | 'control';
@@ -32,23 +32,45 @@ forward(3)
 land()
 `;
 
+// Component Specifications for Weight & Thrust calculations
+const COMPONENT_SPECS = {
+  frame: { weight: 150, thrust: 0 },
+  motors: { weight: 120, thrust: 3200 }, // Total thrust for 4 motors
+  esc: { weight: 20, thrust: 0 },
+  fc: { weight: 10, thrust: 0 },
+  camera: { weight: 15, thrust: 0 },
+  battery: { weight: 250, thrust: 0 },
+  props: { weight: 20, thrust: 0 },
+  wings: { weight: 200, thrust: 0 },
+};
+
 // A wrapper component to handle physics updates within the Canvas
 function PhysicsEngine({ 
   position, 
   setPosition, 
+  rotation,
+  setRotation,
   isHovering, 
   windX, 
   windZ,
-  isRunning
+  isRunning,
+  pGain,
+  crashed
 }: { 
   position: [number, number, number], 
   setPosition: React.Dispatch<React.SetStateAction<[number, number, number]>>,
+  rotation: [number, number, number],
+  setRotation: React.Dispatch<React.SetStateAction<[number, number, number]>>,
   isHovering: boolean,
   windX: number,
   windZ: number,
-  isRunning: boolean
+  isRunning: boolean,
+  pGain: number,
+  crashed: boolean
 }) {
   useFrame((state, delta) => {
+    if (crashed) return;
+
     if (isHovering && isRunning) {
       // Apply wind drift. A real PID controller would fight this, 
       // but we simulate a slight drift that the "code" doesn't perfectly correct.
@@ -59,6 +81,30 @@ function PhysicsEngine({
       // Only update if there's actual wind to avoid constant re-renders
       if (Math.abs(windX) > 0.1 || Math.abs(windZ) > 0.1) {
         setPosition([newX, position[1], newZ]);
+      }
+
+      // PID Wobble Simulation
+      if (pGain !== 1.0) {
+        const time = state.clock.elapsedTime;
+        let wobbleX = 0;
+        let wobbleZ = 0;
+        
+        if (pGain < 0.8) {
+          // Sluggish, slow drift/wobble
+          wobbleX = Math.sin(time * 2) * (1.0 - pGain) * 0.2;
+          wobbleZ = Math.cos(time * 2.5) * (1.0 - pGain) * 0.2;
+        } else if (pGain > 1.2) {
+          // Overcompensated, rapid oscillation
+          wobbleX = Math.sin(time * 20) * (pGain - 1.0) * 0.1;
+          wobbleZ = Math.cos(time * 20) * (pGain - 1.0) * 0.1;
+        }
+        
+        // Update rotation if significant
+        if (Math.abs(wobbleX) > 0.01 || Math.abs(wobbleZ) > 0.01) {
+          setRotation([wobbleX, rotation[1], wobbleZ]);
+        }
+      } else if (rotation[0] !== 0 || rotation[2] !== 0) {
+        setRotation([0, rotation[1], 0]);
       }
     }
   });
@@ -72,6 +118,15 @@ export default function Simulator() {
   const [isRunning, setIsRunning] = useState(false);
   const [logs, setLogs] = useState<string[]>(['System initialized. Ready.']);
   const [showGuide, setShowGuide] = useState(false);
+  const terminalRef = useRef<HTMLDivElement>(null);
+  const [droneType, setDroneType] = useState<DroneType>('quadcopter');
+  const [keyboardEnabled, setKeyboardEnabled] = useState(false);
+
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
+  }, [logs]);
   
   // Drone State
   const [dronePos, setDronePos] = useState<[number, number, number]>([0, 0, 0]);
@@ -82,6 +137,9 @@ export default function Simulator() {
   const [windZ, setWindZ] = useState(0);
   const [batteryVoltage, setBatteryVoltage] = useState(16.8); // 4S LiPo fully charged
   const [throttle, setThrottle] = useState(0);
+  const [pGain, setPGain] = useState(1.0);
+  const [crashed, setCrashed] = useState(false);
+  const [activeMission, setActiveMission] = useState('free');
 
   // Build State
   const [buildState, setBuildState] = useState<BuildState>({
@@ -92,9 +150,22 @@ export default function Simulator() {
     battery: false,
     props: false,
     camera: false,
+    wings: false,
   });
 
-  const isFullyBuilt = Object.values(buildState).every(Boolean);
+  const isFullyBuilt = droneType === 'quadcopter' 
+    ? buildState.frame && buildState.motors && buildState.esc && buildState.fc && buildState.battery && buildState.props
+    : buildState.frame && buildState.motors && buildState.esc && buildState.fc && buildState.battery && buildState.props && buildState.wings;
+
+  // Calculate Weight and Thrust
+  const totalWeight = Object.entries(buildState).reduce((acc, [key, isInstalled]) => {
+    return acc + (isInstalled && COMPONENT_SPECS[key as keyof typeof COMPONENT_SPECS] ? COMPONENT_SPECS[key as keyof typeof COMPONENT_SPECS].weight : 0);
+  }, 0);
+  const maxThrust = buildState.motors && buildState.props && buildState.battery 
+    ? (droneType === 'quadcopter' ? COMPONENT_SPECS.motors.thrust : 2000) 
+    : 0;
+  const twr = maxThrust > 0 ? (maxThrust / totalWeight).toFixed(1) : '0.0';
+  const canFly = parseFloat(twr) > 1.2;
 
   const toggleComponent = (key: keyof BuildState) => {
     setBuildState(prev => ({ ...prev, [key]: !prev[key] }));
@@ -116,6 +187,29 @@ export default function Simulator() {
       setBatteryVoltage(16.8);
     }
   }, [isHovering, throttle]);
+
+  useEffect(() => {
+    if (!keyboardEnabled || !isFullyBuilt || crashed) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['w','a','s','d','arrowup','arrowdown','q','e'].includes(e.key.toLowerCase())) {
+        e.preventDefault();
+      }
+      switch(e.key.toLowerCase()) {
+        case 'w': handleManualCommand('forward'); break;
+        case 's': handleManualCommand('backward'); break;
+        case 'a': handleManualCommand('left'); break;
+        case 'd': handleManualCommand('right'); break;
+        case 'q': handleManualCommand('yaw_left'); break;
+        case 'e': handleManualCommand('yaw_right'); break;
+        case 'arrowup': handleManualCommand('takeoff'); break;
+        case 'arrowdown': handleManualCommand('land'); break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [keyboardEnabled, isFullyBuilt, crashed, dronePos, droneRot]);
 
   const handleManualCommand = (cmd: string) => {
     if (!isFullyBuilt) return;
@@ -174,6 +268,14 @@ export default function Simulator() {
   const runCode = async () => {
     if (!isFullyBuilt) {
       addLog("ERROR: Drone is not fully built. Complete assembly first.");
+      return;
+    }
+    if (!canFly) {
+      addLog("ERROR: Thrust-to-Weight Ratio too low. Cannot takeoff.");
+      return;
+    }
+    if (crashed) {
+      addLog("ERROR: Drone is crashed. Reset required.");
       return;
     }
     
@@ -253,8 +355,30 @@ export default function Simulator() {
         const val = parseFloat(line.match(/\d+/)?.[0] || '1');
         setThrottle(0.3);
         await new Promise(r => setTimeout(r, val * 1000));
+      } else if (line.startsWith('waypoint(')) {
+        const match = line.match(/waypoint\(([-.\d]+),\s*([-.\d]+)\)/);
+        if (match) {
+          const targetX = parseFloat(match[1]);
+          const targetZ = parseFloat(match[2]);
+          setThrottle(0.6);
+          setDronePos(prev => [targetX, prev[1], targetZ]);
+          await new Promise(r => setTimeout(r, 2000));
+          setThrottle(0.3);
+        }
+      } else if (line.startsWith('print_telemetry()')) {
+        addLog(`Telemetry - Alt: ${dronePos[1].toFixed(1)}m, Bat: ${batteryVoltage.toFixed(1)}V`);
       } else {
         addLog(`Unknown command: ${line}`);
+      }
+
+      // Mission Checks
+      if (activeMission === 'hoop') {
+        // Check if drone is near the hoop at [0, 3, -5]
+        const dist = Math.sqrt(Math.pow(dronePos[0], 2) + Math.pow(dronePos[1] - 3, 2) + Math.pow(dronePos[2] - (-5), 2));
+        if (dist < 1.5) {
+          addLog("MISSION COMPLETE: Passed through hoop!");
+          setActiveMission('free');
+        }
       }
     }
     
@@ -266,6 +390,7 @@ export default function Simulator() {
   const stopCode = () => {
     setIsRunning(false);
     setIsHovering(false);
+    setCrashed(false);
     setThrottle(0);
     setDronePos([0,0,0]);
     setDroneRot([0,0,0]);
@@ -312,6 +437,21 @@ export default function Simulator() {
               <div className="mb-6">
                 <h2 className="text-lg font-bold">Assembly Bay</h2>
                 <p className="text-sm text-muted-foreground">Click components to install them on the frame.</p>
+              </div>
+
+              <div className="flex gap-2 mb-4">
+                <button 
+                  onClick={() => setDroneType('quadcopter')}
+                  className={cn("flex-1 py-2 text-xs font-bold rounded-lg border transition-all", droneType === 'quadcopter' ? "bg-primary/20 border-primary text-primary" : "border-border/50 text-muted-foreground hover:bg-secondary")}
+                >
+                  Quadcopter
+                </button>
+                <button 
+                  onClick={() => setDroneType('fixed-wing')}
+                  className={cn("flex-1 py-2 text-xs font-bold rounded-lg border transition-all", droneType === 'fixed-wing' ? "bg-primary/20 border-primary text-primary" : "border-border/50 text-muted-foreground hover:bg-secondary")}
+                >
+                  VTOL Fixed-Wing
+                </button>
               </div>
               
               {[
@@ -382,11 +522,47 @@ export default function Simulator() {
                   </motion.div>
                 )
               })}
+
+              {droneType === 'fixed-wing' && (
+                <button 
+                  onClick={() => toggleComponent('wings')}
+                  className={cn("w-full flex items-center justify-between p-3 rounded-xl border transition-all", buildState.wings ? "bg-emerald-500/10 border-emerald-500/50 text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)]" : "bg-secondary/50 border-border/50 text-muted-foreground hover:border-primary/50")}
+                >
+                  <div className="flex items-center gap-3">
+                    {buildState.wings ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
+                    <span className="font-medium">Aerodynamic Wings & Tail</span>
+                  </div>
+                  <span className="text-xs font-mono opacity-70">200g</span>
+                </button>
+              )}
               
               <div className="mt-8 p-4 bg-secondary/30 rounded-xl border border-border/50">
+                <h3 className="text-sm font-bold mb-3">Drone Specifications</h3>
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="p-3 bg-background rounded-lg border border-border/50">
+                    <div className="text-xs text-muted-foreground mb-1">Total Weight</div>
+                    <div className="font-mono font-bold">{totalWeight}g</div>
+                  </div>
+                  <div className="p-3 bg-background rounded-lg border border-border/50">
+                    <div className="text-xs text-muted-foreground mb-1">Max Thrust</div>
+                    <div className="font-mono font-bold">{maxThrust}g</div>
+                  </div>
+                </div>
+                
+                <div className="flex items-center justify-between p-3 bg-background rounded-lg border border-border/50 mb-4">
+                  <div className="text-sm font-medium">Thrust-to-Weight Ratio</div>
+                  <div className={cn("font-mono font-bold", parseFloat(twr) < 1.2 ? "text-red-500" : "text-emerald-500")}>
+                    {twr} : 1
+                  </div>
+                </div>
+
                 <h3 className="text-sm font-bold mb-2">Status</h3>
                 {isFullyBuilt ? (
-                  <p className="text-sm text-emerald-500 flex items-center gap-2"><CheckCircle2 className="w-4 h-4"/> Ready for flight coding</p>
+                  canFly ? (
+                    <p className="text-sm text-emerald-500 flex items-center gap-2"><CheckCircle2 className="w-4 h-4"/> Ready for flight</p>
+                  ) : (
+                    <p className="text-sm text-red-500 flex items-center gap-2"><AlertTriangle className="w-4 h-4"/> TWR too low. Drone cannot lift off.</p>
+                  )
                 ) : (
                   <p className="text-sm text-yellow-500">Assembly incomplete</p>
                 )}
@@ -401,13 +577,23 @@ export default function Simulator() {
                   <h2 className="text-lg font-bold">Flight Computer</h2>
                   <p className="text-sm text-muted-foreground">Write Python-like scripts.</p>
                 </div>
-                <button 
-                  onClick={() => setShowGuide(!showGuide)}
-                  className="p-2 bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
-                  title="Toggle Code Guide"
-                >
-                  <BookOpen className="w-5 h-5 text-accent" />
-                </button>
+                <div className="flex gap-2">
+                  <select 
+                    value={activeMission}
+                    onChange={(e) => setActiveMission(e.target.value)}
+                    className="bg-secondary text-sm rounded-lg px-3 py-1.5 border border-border/50 focus:outline-none focus:border-primary"
+                  >
+                    <option value="free">Free Flight</option>
+                    <option value="hoop">Mission: Hoop Challenge</option>
+                  </select>
+                  <button 
+                    onClick={() => setShowGuide(!showGuide)}
+                    className="p-2 bg-secondary rounded-lg hover:bg-secondary/80 transition-colors"
+                    title="Toggle Code Guide"
+                  >
+                    <BookOpen className="w-5 h-5 text-accent" />
+                  </button>
+                </div>
               </div>
 
               {showGuide && (
@@ -443,6 +629,16 @@ export default function Simulator() {
                     <div>
                       <code className="text-primary font-bold bg-primary/10 px-1 rounded">hover(seconds)</code>
                       <p className="text-xs mt-1">Maintains current position and altitude for the specified duration using GPS and Barometer sensor fusion.</p>
+                    </div>
+
+                    <div>
+                      <code className="text-primary font-bold bg-primary/10 px-1 rounded">waypoint(x, z)</code>
+                      <p className="text-xs mt-1">Flies directly to the specified X and Z coordinates. E.g., <code>waypoint(0, -5)</code></p>
+                    </div>
+
+                    <div>
+                      <code className="text-primary font-bold bg-primary/10 px-1 rounded">print_telemetry()</code>
+                      <p className="text-xs mt-1">Reads sensor data (Altitude, Battery) and prints it to the terminal.</p>
                     </div>
                   </div>
 
@@ -549,6 +745,26 @@ vehicle.close()`}
                 </div>
               ) : (
                 <>
+                  <div className="bg-secondary/30 p-5 rounded-xl border border-border/50 mb-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-bold flex items-center gap-2"><Keyboard className="w-4 h-4 text-primary"/> Keyboard Controls</h3>
+                      <button 
+                        onClick={() => setKeyboardEnabled(!keyboardEnabled)}
+                        className={cn("px-3 py-1 text-xs font-bold rounded-full transition-all", keyboardEnabled ? "bg-emerald-500 text-white" : "bg-secondary text-muted-foreground hover:bg-secondary/80")}
+                      >
+                        {keyboardEnabled ? 'ENABLED' : 'DISABLED'}
+                      </button>
+                    </div>
+                    {keyboardEnabled && (
+                      <div className="grid grid-cols-2 gap-4 text-xs text-muted-foreground font-mono bg-background/50 p-3 rounded-lg border border-border/50">
+                        <div><strong className="text-foreground">W / S</strong> : Forward / Backward</div>
+                        <div><strong className="text-foreground">A / D</strong> : Strafe Left / Right</div>
+                        <div><strong className="text-foreground">↑ / ↓</strong> : Takeoff / Land</div>
+                        <div><strong className="text-foreground">Q / E</strong> : Yaw Left / Right</div>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex gap-4">
                     <button 
                       onClick={() => handleManualCommand('takeoff')}
@@ -593,6 +809,21 @@ vehicle.close()`}
 
               <div className="bg-secondary/30 p-5 rounded-xl border border-border/50 space-y-6">
                 <div>
+                  <div className="flex justify-between mb-2">
+                    <label className="text-sm font-bold flex items-center gap-2"><Target className="w-4 h-4 text-purple-500"/> PID Tuning (P-Gain)</label>
+                    <span className="text-sm font-mono text-purple-500">{pGain.toFixed(1)}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3">Adjust the Proportional gain. Too low = sluggish/wobble. Too high = rapid oscillation.</p>
+                  <input 
+                    type="range" 
+                    min="0.1" max="2.5" step="0.1" 
+                    value={pGain} 
+                    onChange={(e) => setPGain(parseFloat(e.target.value))}
+                    className="w-full accent-purple-500"
+                  />
+                </div>
+
+                <div className="border-t border-border/50 pt-6">
                   <div className="flex justify-between mb-2">
                     <label className="text-sm font-bold flex items-center gap-2"><Wind className="w-4 h-4 text-primary"/> Wind X (Crosswind)</label>
                     <span className="text-sm font-mono text-primary">{windX.toFixed(1)} m/s</span>
@@ -650,10 +881,14 @@ vehicle.close()`}
             <PhysicsEngine 
               position={dronePos} 
               setPosition={setDronePos} 
+              rotation={droneRot}
+              setRotation={setDroneRot}
               isHovering={isHovering} 
               windX={windX} 
               windZ={windZ} 
               isRunning={isRunning || isHovering}
+              pGain={pGain}
+              crashed={crashed}
             />
 
             <Suspense fallback={
@@ -663,10 +898,25 @@ vehicle.close()`}
             }>
               <DroneModel 
                 buildState={buildState} 
-                isHovering={isHovering} 
+                isHovering={isHovering && !crashed} 
                 position={dronePos}
                 rotation={droneRot}
+                type={droneType}
               />
+              
+              {/* Mission Objects */}
+              {activeMission === 'hoop' && (
+                <mesh position={[0, 3, -5]}>
+                  <torusGeometry args={[1.5, 0.1, 16, 100]} />
+                  <meshStandardMaterial color="#f97316" emissive="#f97316" emissiveIntensity={0.5} />
+                  <Html position={[0, 2, 0]} center>
+                    <div className="bg-background/80 backdrop-blur px-2 py-1 rounded border border-orange-500/50 text-orange-500 text-xs font-bold whitespace-nowrap">
+                      TARGET WAYPOINT
+                    </div>
+                  </Html>
+                </mesh>
+              )}
+
               <Environment preset="city" />
               {/* Grid floor for better spatial awareness */}
               <gridHelper args={[20, 20, '#3f3f46', '#27272a']} position={[0, -0.01, 0]} />
@@ -709,7 +959,7 @@ vehicle.close()`}
         </div>
 
         {/* Terminal / Logs */}
-        <div className="h-56 border-t border-border/50 bg-[#0c0c0e]/90 backdrop-blur-xl p-4 font-mono text-xs overflow-y-auto flex flex-col custom-scrollbar shadow-[0_-10px_40px_rgba(0,0,0,0.5)] z-20">
+        <div ref={terminalRef} className="h-56 border-t border-border/50 bg-[#0c0c0e]/90 backdrop-blur-xl p-4 font-mono text-xs overflow-y-auto flex flex-col custom-scrollbar shadow-[0_-10px_40px_rgba(0,0,0,0.5)] z-20">
           <div className="flex items-center justify-between text-muted-foreground mb-3 sticky top-0 bg-[#0c0c0e]/90 backdrop-blur pb-2 border-b border-border/20">
             <div className="flex items-center gap-2">
               <Terminal className="w-4 h-4 text-primary" /> 
@@ -732,8 +982,6 @@ vehicle.close()`}
                 {log}
               </div>
             ))}
-            {/* Empty div to scroll to bottom */}
-            <div ref={(el) => el?.scrollIntoView()} />
           </div>
         </div>
       </div>

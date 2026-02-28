@@ -11,6 +11,7 @@ export interface BuildState {
   battery: boolean;
   props: boolean;
   camera: boolean;
+  wings?: boolean;
 }
 
 // Helper component for scale-in animation
@@ -35,13 +36,15 @@ interface DroneModelProps {
   isHovering?: boolean;
   position?: [number, number, number];
   rotation?: [number, number, number];
+  type?: 'quadcopter' | 'fixed-wing';
 }
 
 export default function DroneModel({ 
   buildState, 
   isHovering = false, 
   position = [0, 0, 0], 
-  rotation = [0, 0, 0] 
+  rotation = [0, 0, 0],
+  type = 'quadcopter'
 }: DroneModelProps) {
   const groupRef = useRef<THREE.Group>(null);
   const propRefs = [
@@ -91,6 +94,63 @@ export default function DroneModel({
   const propLength = 2.8;
 
   if (!buildState.frame) return null;
+
+  if (type === 'fixed-wing') {
+    return (
+      <group ref={groupRef}>
+        {/* Fuselage */}
+        <Box args={[0.4, 0.4, 3]} position={[0, 0, 0]}>
+          <meshStandardMaterial color="#1f2937" metalness={0.8} roughness={0.2} />
+        </Box>
+        {/* Wings */}
+        {buildState.wings && (
+          <Box args={[4, 0.05, 0.8]} position={[0, 0.2, 0.2]}>
+            <meshStandardMaterial color="#3b82f6" metalness={0.5} roughness={0.5} />
+          </Box>
+        )}
+        {/* V-Tail */}
+        {buildState.wings && (
+          <group position={[0, 0.2, -1.3]}>
+            <Box args={[1.2, 0.05, 0.4]} rotation={[0, 0, Math.PI / 6]} position={[0.5, 0.2, 0]}>
+              <meshStandardMaterial color="#3b82f6" metalness={0.5} roughness={0.5} />
+            </Box>
+            <Box args={[1.2, 0.05, 0.4]} rotation={[0, 0, -Math.PI / 6]} position={[-0.5, 0.2, 0]}>
+              <meshStandardMaterial color="#3b82f6" metalness={0.5} roughness={0.5} />
+            </Box>
+          </group>
+        )}
+        {/* Motor (Pusher) */}
+        {buildState.motors && (
+          <Cylinder args={[0.15, 0.15, 0.4]} position={[0, 0, -1.6]} rotation={[Math.PI / 2, 0, 0]}>
+            <meshStandardMaterial color="#9ca3af" metalness={0.9} roughness={0.1} />
+          </Cylinder>
+        )}
+        {/* Propeller */}
+        {buildState.props && (
+          <Box ref={propRefs[0]} args={[1.5, 0.05, 0.05]} position={[0, 0, -1.8]}>
+            <meshStandardMaterial color="#ef4444" />
+          </Box>
+        )}
+        {/* Camera/Payload */}
+        {buildState.camera && (
+          <Sphere args={[0.15]} position={[0, -0.2, 1.2]}>
+            <meshStandardMaterial color="#10b981" metalness={0.8} roughness={0.2} />
+          </Sphere>
+        )}
+        {/* FC & Battery (Internal/Visible on top) */}
+        {buildState.fc && (
+          <Box args={[0.2, 0.05, 0.2]} position={[0, 0.25, 0]}>
+            <meshStandardMaterial color="#8b5cf6" />
+          </Box>
+        )}
+        {buildState.battery && (
+          <Box args={[0.25, 0.15, 0.5]} position={[0, 0.25, 0.5]}>
+            <meshStandardMaterial color="#10b981" />
+          </Box>
+        )}
+      </group>
+    );
+  }
 
   return (
     <group ref={groupRef}>
