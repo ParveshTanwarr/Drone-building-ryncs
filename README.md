@@ -26,30 +26,50 @@ to be contuined
 more changes soon ig
 
 
+## Detailed Installation Guide
 
-Insturctions:
-  install git
-  install python
-  vs code also
-  ubnantu for better running
+### 1. Prerequisites
 
-now:
-  git clone https://github.com/ParveshTanwarr/Drone-building-ryncs.git
-cd Drone-building-ryncs
+Ensure you have the following installed on your system:
+- Node.js (v18 or higher)
+- Git
+- A Code Editor (Notepad can also work)
 
-create python virtual enviorment:
-  python -m venv venv
+### 2. Clone the Repository
 
-install dependcies:
-  pip install -r requirements.txt
-if not presenet then manually:
-    pip install mavsdk asyncio numpy matplotlib
+Open your terminal (command prompt) and run:
 
-running PID
-go to control folder
-   cd control
-  run PID simulation
-  python pid_test.py
+```
+git clone https://github.com/ParveshTanwarr/Drone-building-ryncs.git
+cd Drone-Building-ryncs
+```
+### 3. Environment Configuration
 
+This project requires a Gemini API Key to function.
 
-  etcetc
+- Navigate to `C:\Users\"your-username"\Drone-Building-ryncs`
+- Open the `.env.example` file using Notepad
+- Obtain your key from Google AI Studio by going to `https://aistudio.google.com/` and creating an API key
+- Update the following lines in the .env file:
+```
+GEMINI_API_KEY=your_key_here
+
+APP_URL="http://localhost:3000"
+```
+- Rename the file to `.env` 
+
+### 4. Install Dependencies
+
+Download the necessary libraries by running this command in the command prompt:
+```
+npm install
+```
+### 5. Run the Application
+
+Start the development server:
+
+```
+npm run dev
+```
+The app will be available at `http://localhost:3000`.
+
