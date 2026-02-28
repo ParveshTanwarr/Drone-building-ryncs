@@ -24,3 +24,32 @@ What I don't know (yet):
 - Sensor fusion
 to be contuined 
 more changes soon ig
+
+
+
+Insturctions:
+  install git
+  install python
+  vs code also
+  ubnantu for better running
+
+now:
+  git clone https://github.com/ParveshTanwarr/Drone-building-ryncs.git
+cd Drone-building-ryncs
+
+create python virtual enviorment:
+  python -m venv venv
+
+install dependcies:
+  pip install -r requirements.txt
+if not presenet then manually:
+    pip install mavsdk asyncio numpy matplotlib
+
+running PID
+go to control folder
+   cd control
+  run PID simulation
+  python pid_test.py
+
+
+  etcetc
