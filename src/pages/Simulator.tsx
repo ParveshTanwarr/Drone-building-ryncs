@@ -273,38 +273,40 @@ export default function Simulator() {
   };
 
   return (
-    <div className="flex-1 flex flex-col md:flex-row h-[calc(100vh-3.5rem)] overflow-hidden bg-background">
+    <div className="flex-1 flex flex-col md:flex-row h-[calc(100vh-3.5rem)] overflow-hidden bg-background relative z-10">
       
       {/* Left Sidebar - Controls */}
-      <div className="w-full md:w-[400px] border-r border-border/50 flex flex-col bg-card z-10 shadow-xl">
-        <div className="flex border-b border-border/50 text-xs md:text-sm">
-          <button 
-            onClick={() => setMode('build')}
-            className={cn("flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-colors", mode === 'build' ? "text-primary border-b-2 border-primary bg-primary/5" : "text-muted-foreground hover:bg-secondary/50")}
-          >
-            <Wrench className="w-4 h-4" /> Build
-          </button>
-          <button 
-            onClick={() => setMode('code')}
-            className={cn("flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-colors", mode === 'code' ? "text-accent border-b-2 border-accent bg-accent/5" : "text-muted-foreground hover:bg-secondary/50")}
-          >
-            <Code className="w-4 h-4" /> Code
-          </button>
-          <button 
-            onClick={() => setMode('control')}
-            className={cn("flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-colors", mode === 'control' ? "text-orange-500 border-b-2 border-orange-500 bg-orange-500/5" : "text-muted-foreground hover:bg-secondary/50")}
-          >
-            <Gamepad2 className="w-4 h-4" /> Fly
-          </button>
-          <button 
-            onClick={() => setMode('physics')}
-            className={cn("flex-1 py-4 flex items-center justify-center gap-2 font-medium transition-colors", mode === 'physics' ? "text-emerald-500 border-b-2 border-emerald-500 bg-emerald-500/5" : "text-muted-foreground hover:bg-secondary/50")}
-          >
-            <SlidersHorizontal className="w-4 h-4" /> Physics
-          </button>
+      <div className="w-full md:w-[420px] border-r border-border/50 flex flex-col bg-card/40 backdrop-blur-xl z-20 shadow-2xl">
+        <div className="p-4 border-b border-border/50">
+          <div className="flex bg-secondary/50 p-1 rounded-xl border border-border/50 backdrop-blur-sm">
+            <button 
+              onClick={() => setMode('build')}
+              className={cn("flex-1 py-2.5 flex items-center justify-center gap-2 text-sm font-medium transition-all rounded-lg", mode === 'build' ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+            >
+              <Wrench className="w-4 h-4" /> Build
+            </button>
+            <button 
+              onClick={() => setMode('code')}
+              className={cn("flex-1 py-2.5 flex items-center justify-center gap-2 text-sm font-medium transition-all rounded-lg", mode === 'code' ? "bg-accent text-accent-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+            >
+              <Code className="w-4 h-4" /> Code
+            </button>
+            <button 
+              onClick={() => setMode('control')}
+              className={cn("flex-1 py-2.5 flex items-center justify-center gap-2 text-sm font-medium transition-all rounded-lg", mode === 'control' ? "bg-orange-500 text-white shadow-sm" : "text-muted-foreground hover:text-foreground")}
+            >
+              <Gamepad2 className="w-4 h-4" /> Fly
+            </button>
+            <button 
+              onClick={() => setMode('physics')}
+              className={cn("flex-1 py-2.5 flex items-center justify-center gap-2 text-sm font-medium transition-all rounded-lg", mode === 'physics' ? "bg-emerald-500 text-white shadow-sm" : "text-muted-foreground hover:text-foreground")}
+            >
+              <SlidersHorizontal className="w-4 h-4" /> Physics
+            </button>
+          </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 flex flex-col">
+        <div className="flex-1 overflow-y-auto p-6 flex flex-col custom-scrollbar">
           {mode === 'build' && (
             <div className="space-y-4">
               <div className="mb-6">
@@ -637,10 +639,10 @@ vehicle.close()`}
       </div>
 
       {/* Right Area - 3D Canvas & Terminal */}
-      <div className="flex-1 relative flex flex-col bg-zinc-950">
+      <div className="flex-1 relative flex flex-col bg-zinc-950/50 backdrop-blur-sm">
         <div className="flex-1 relative">
           <Canvas camera={{ position: [5, 4, 5], fov: 45 }}>
-            <color attach="background" args={['#09090b']} />
+            <color attach="background" args={['transparent']} />
             <ambientLight intensity={0.6} />
             <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={1.5} castShadow />
             <pointLight position={[-10, -10, -10]} intensity={0.5} />
@@ -707,17 +709,26 @@ vehicle.close()`}
         </div>
 
         {/* Terminal / Logs */}
-        <div className="h-48 border-t border-border/50 bg-[#0c0c0e] p-4 font-mono text-xs overflow-y-auto flex flex-col">
-          <div className="flex items-center gap-2 text-muted-foreground mb-2 sticky top-0 bg-[#0c0c0e] pb-2 border-b border-border/20">
-            <Terminal className="w-4 h-4" /> System Logs
+        <div className="h-56 border-t border-border/50 bg-[#0c0c0e]/90 backdrop-blur-xl p-4 font-mono text-xs overflow-y-auto flex flex-col custom-scrollbar shadow-[0_-10px_40px_rgba(0,0,0,0.5)] z-20">
+          <div className="flex items-center justify-between text-muted-foreground mb-3 sticky top-0 bg-[#0c0c0e]/90 backdrop-blur pb-2 border-b border-border/20">
+            <div className="flex items-center gap-2">
+              <Terminal className="w-4 h-4 text-primary" /> 
+              <span className="font-bold tracking-wider uppercase text-[10px]">Flight Computer Telemetry</span>
+            </div>
+            <div className="flex gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-red-500/80"></div>
+              <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/80"></div>
+              <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80"></div>
+            </div>
           </div>
-          <div className="flex-1 space-y-1">
+          <div className="flex-1 space-y-1.5 pl-2 border-l-2 border-border/30">
             {logs.map((log, i) => (
-              <div key={i} className={
+              <div key={i} className={cn(
+                "pl-2 relative before:content-['>'] before:absolute before:-left-3 before:text-muted-foreground/50",
                 log.includes('ERROR') ? 'text-red-400' : 
                 log.includes('Executing') || log.includes('Manual Override') ? 'text-accent' : 
-                'text-emerald-400/70'
-              }>
+                'text-emerald-400/80'
+              )}>
                 {log}
               </div>
             ))}
