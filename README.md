@@ -1,20 +1,26 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# VTOL Drone Project (Rynx)
 
-# Run and deploy your AI Studio app
+I started this project to understand how real drones work — not just simulations.
 
-This contains everything you need to run your app locally.
+Current goal:
+→ Build a working quadplane VTOL system from scratch
 
-View your app in AI Studio: https://ai.studio/apps/30653f32-55e8-4794-b861-faa50cd44b44
+Status:
+- Frame design: Not finalized
+- Flight controller: Learning phase
+- Simulation: Planned
+- Hardware: Not purchased yet
 
-## Run Locally
+Why I'm building this:
+I want to move into aerospace / robotics and eventually build advanced autonomous systems.
 
-**Prerequisites:**  Node.js
+What I know:
+- Basic Python
+- Basic electronics (learning)
 
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+What I don't know (yet):
+- Flight control tuning
+- PX4 / ArduPilot setup
+- Sensor fusion
+to be contuined 
+more changes soon ig
